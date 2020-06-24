@@ -1,27 +1,65 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // устанавливаем дефолтное значение для сортировки в localStorage
-  let sortedStorage =
-    window.localStorage.getItem("sorted") === null
-      ? window.localStorage.setItem("sorted", "max")
-      : window.localStorage.getItem("sorted");
-  // устанавливаем дефолтное значение для строки с opacity в localStorage
-  let showStorage =
-    window.localStorage.getItem("show") === null
-      ? window.localStorage.setItem("show", "-1")
-      : window.localStorage.getItem("show");
-  let full_count = 0; // переменная по которой будем изменять данные в таблице
   const urlData =
     "https://data-live.flightradar24.com/zones/fcgi/feed.js?bounds=56.84,55.27,33.48,41.48"; // url с данными
-  const coordinatesDME = [55.410307, 37.902451]; // координаты аэропорта домодедово
-  const tableBody = document.querySelector(".air-table__body"); // Контейнер с данными
-  const sortedTd = document.querySelector("[data-sorted]"); // Элемент с кликом
-  let GLOBAL_DATA;
-  const sortedMax = (a, b) => a.distance - b.distance; // сортиврока max -> min
-  const sortedMin = (a, b) => b.distance - a.distance; // сортировка min -> max
-  // Создание необходимого объекта с данными из response
-  const createAirplain = (
+  const DME = [55.410307, 37.902451];
+  const KNOT = 1.852;
+  const FOOT = 3.281;
+  let isSortValue = true; // сортировка таблицы
+  const container = document.querySelector(".air-table__body");
+  const columnSorted = document.querySelector("[data-sorted]");
+  const sortedData = (data, isMaxSorted = true) => {
+    return data.sort((a, b) => (isMaxSorted ? a[9] - b[9] : b[9] - a[9]));
+  };
+  const drawTable = (data) => {
+    container.innerHTML = "";
+    data.map((el) => {
+      return (container.innerHTML += createRow(
+        el[0],
+        el[2],
+        `${el[3]} - ${el[4]}`,
+        el[5],
+        "?",
+        el[6],
+        `${el[7]} - ${el[8]}`,
+        el[9]
+      ));
+    });
+    // после отрисовки таблицы у нас все все строки
+    const rows = Array.from(document.querySelectorAll(".air-table__row"));
+    rows.map((row) => {
+      row.addEventListener("click", function () {
+        const isContainsClass = this.classList.contains("bg-primary");
+        const saveRowsStorage = window.localStorage.getItem("saveRow");
+        // если у строки есть активный клаа
+        if (isContainsClass) {
+          this.classList.remove("bg-primary"); // удалим этот активный класс
+          const newSaveRowsStorage = saveRowsStorage // в любом случае localStorage тут НЕ пустой
+            .split(", ") // сделаем из строки массив
+            .filter((el) => el !== this.getAttribute("data-id")) // отфильтруем этот массив по id
+            .join(", "); // вернем обратно строку
+          window.localStorage.setItem("saveRow", newSaveRowsStorage); // обновим localStorage
+        } else {
+          // если у строки нет класса, тогда проверяем localStorage
+          if (saveRowsStorage === null) {
+            // если пусто задаем значение
+            window.localStorage.setItem(
+              "saveRow",
+              this.getAttribute("data-id")
+            );
+          } else {
+            // если в localStorage уже что-то написано, то объединяем эти значения
+            window.localStorage.setItem(
+              "saveRow",
+              `${saveRowsStorage}, ${this.getAttribute("data-id")}`
+            );
+          }
+          this.classList.add("bg-primary");
+        }
+      });
+    });
+  };
+  const createRow = (
     id,
-    show,
     flightNumber,
     airCoords,
     speed,
@@ -30,17 +68,32 @@ document.addEventListener("DOMContentLoaded", () => {
     codeAirports,
     distance
   ) => {
-    return {
-      id: id,
-      show: show,
-      flightNumber: `${flightNumber}`,
-      airCoords: `${airCoords}`,
-      speed: Number(speed),
-      course: `${course}`,
-      heightAir: Number(heightAir),
-      codeAirports: `${codeAirports}`,
-      distance: Number(distance),
-    };
+    const baseTemplate = `<tr class="air-table__row" data-id="${id}">
+        <td class="air-table__td">${flightNumber}</td>
+        <td class="air-table__td">${airCoords}</td>
+        <td class="air-table__td">${speed}</td>
+        <td class="air-table__td">${course}</td>
+        <td class="air-table__td">${heightAir}</td>
+        <td class="air-table__td">${codeAirports}</td>
+        <td class="air-table__td">${distance}</td>
+        </tr>`;
+    const activeTemplate = `<tr class="air-table__row bg-primary" data-id="${id}">
+        <td class="air-table__td">${flightNumber}</td>
+        <td class="air-table__td">${airCoords}</td>
+        <td class="air-table__td">${speed}</td>
+        <td class="air-table__td">${course}</td>
+        <td class="air-table__td">${heightAir}</td>
+        <td class="air-table__td">${codeAirports}</td>
+        <td class="air-table__td">${distance}</td>
+        </tr>`;
+    const activeRows =
+      window.localStorage.getItem("saveRow") === null
+        ? null
+        : window.localStorage.getItem("saveRow").split(", ");
+    if (!!activeRows) {
+      return activeRows.includes(id) ? activeTemplate : baseTemplate;
+    }
+    return baseTemplate;
   };
   // подсчет расстояния от домодедово до самолета в метрах
   const latlng2distance = (lat1, long1, lat2, long2) => {
@@ -65,148 +118,92 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     const x = sl1 * sl2 + cl1 * cl2 * cdelta;
     const ad = Math.atan2(y, x);
-    const distance = ad * R; //расстояние между двумя координатами в метрах
-    return distance;
+    // расстояние между двумя координатами в метрах
+    return Math.round(ad * R);
   };
-  // создание 1 строки
-  const createRow = (
-    id,
-    show,
-    flightNumber,
-    airCoords,
-    speed,
-    course,
-    heightAir,
-    codeAirports,
-    distance
-  ) => {
-    return show
-      ? `<tr class="air-table__row air-table__opacity" data-row-id="${id}">
-        <td class="air-table__td">${flightNumber}</td>
-        <td class="air-table__td">${airCoords}</td>
-        <td class="air-table__td">${speed}</td>
-        <td class="air-table__td">${course}</td>
-        <td class="air-table__td">${heightAir}</td>
-        <td class="air-table__td">${codeAirports}</td>
-        <td class="air-table__td">${distance}</td>
-        </tr>`
-      : `<tr class="air-table__row" data-row-id="${id}">
-        <td class="air-table__td">${flightNumber}</td>
-        <td class="air-table__td">${airCoords}</td>
-        <td class="air-table__td">${speed}</td>
-        <td class="air-table__td">${course}</td>
-        <td class="air-table__td">${heightAir}</td>
-        <td class="air-table__td">${codeAirports}</td>
-        <td class="air-table__td">${distance}</td>
-        </tr>`;
+  const formattingData = (dataFromResponse) => {
+    return Object.keys(dataFromResponse)
+      .reduce((acc, current) => {
+        return [...acc, [current, ...dataFromResponse[current]]];
+      }, [])
+      .reduce((acc, current) => {
+        const [
+          id,
+          ,
+          coords1,
+          coords2,
+          ,
+          heightInFoots,
+          speedInKnots,
+          ,
+          ,
+          ,
+          ,
+          ,
+          airportFrom,
+          airportTo,
+          flightNumber,
+        ] = current;
+        return [
+          ...acc,
+          [
+            id,
+            false,
+            flightNumber,
+            coords1,
+            coords2,
+            Math.round(speedInKnots * KNOT),
+            Math.round(heightInFoots / FOOT),
+            airportFrom,
+            airportTo,
+            latlng2distance(DME[0], DME[1], coords1, coords2),
+          ],
+        ];
+      }, []);
   };
 
-  // заполнение таблицы данными
-  const fillTable = (data) => {
-    full_count = data.full_count;
-    // достал все значения и проверил, являются ли каждый из них массивом
-    const allAirplains = Object.values(data).filter((el) => Array.isArray(el));
-    // переменная для всех самолетов
-    const allAirplainsData = [{ sorted: sortedStorage, airplains: [] }];
-    // добавление всех самолетов в переменную
-    allAirplainsData[0].airplains.push(
-      ...allAirplains.map((el) => {
-        return createAirplain(
-          el[13],
-          el[13] === showStorage,
-          el[13],
-          `${el[1]}, ${el[2]}`,
-          el[5],
-          "курс?",
-          el[4],
-          `${el[11]} - ${el[12]}`,
-          Math.round(
-            latlng2distance(coordinatesDME[0], coordinatesDME[1], el[1], el[2])
-          )
-        );
-      })
-    );
-    // отсортировали данные в зависимости от localstorage.sorted
-    allAirplainsData[0].airplains.sort((a, b) =>
-      sortedStorage === "max" ? sortedMax(a, b) : sortedMin(a, b)
-    );
-    // создал переменную для всех строк
-    const allRowsHTML = allAirplainsData[0].airplains.map(
-      ({
-        show,
-        flightNumber,
-        airCoords,
-        speed,
-        course,
-        heightAir,
-        codeAirports,
-        distance,
-      }) => {
-        return createRow(
-          flightNumber,
-          show,
-          flightNumber,
-          airCoords,
-          speed,
-          course,
-          heightAir,
-          codeAirports,
-          distance
-        );
-      }
-    );
-    // добавил все самолеты в таблицу
-    tableBody.insertAdjacentHTML("afterbegin", allRowsHTML.join(""));
-    //
-    const allRows = document.querySelectorAll(".air-table__row");
-    const arrAllRows = Array.from(allRows);
-    arrAllRows.map((el) => {
-      return el.addEventListener("click", (e) => {
-        arrAllRows.map((el) => {
-          return el.classList.remove("air-table__opacity");
-        });
-        const clickedRow = e.target.parentNode;
-        clickedRow.classList.add("air-table__opacity");
-        window.localStorage.setItem(
-          "show",
-          clickedRow.getAttribute("data-row-id")
-        );
-        showStorage = window.localStorage.getItem("show");
-      });
-    });
-    // Part 1 END
-  };
-  // первая загрузка
   fetch(urlData)
-    .then((response) => response.json())
+    .then((response) => {
+      return response.ok ? response.json() : response.status;
+    })
     .then((data) => {
-      GLOBAL_DATA = data;
-      fillTable(GLOBAL_DATA);
-    });
-  // последующие загрузки данных
-  const timer = setInterval(() => {
-    fetch(urlData)
-      .then((response) => response.json())
-      .then((data) => {
-        if (full_count !== data.full_count) {
-          tableBody.innerHTML = "";
-          GLOBAL_DATA = data;
-          fillTable(GLOBAL_DATA);
-        } else return;
+      const { full_count, version, ...rest } = data;
+      const allAirplanes = formattingData(rest);
+      /*Сортировка массива в порядке возрастания от DME по умолчанию*/
+      sortedData(allAirplanes);
+      drawTable(allAirplanes);
+      columnSorted.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (this.getAttribute("data-sorted") === "max") {
+          isSortValue = false;
+          this.setAttribute("data-sorted", "min");
+        } else {
+          isSortValue = true;
+          this.setAttribute("data-sorted", "max");
+        }
+        sortedData(allAirplanes, isSortValue);
+        drawTable(allAirplanes);
       });
-  }, 4000);
-
-  sortedTd.addEventListener("click", () => {
-    if (sortedStorage === "max") {
-      window.localStorage.sorted = "min";
-      sortedStorage = window.localStorage.getItem("sorted");
-      tableBody.innerHTML = "";
-      fillTable(GLOBAL_DATA);
-    } else {
-      window.localStorage.sorted = "max";
-      sortedStorage = window.localStorage.getItem("sorted");
-      tableBody.innerHTML = "";
-      fillTable(GLOBAL_DATA);
-    }
-  });
+      const timerId = setInterval(() => {
+        fetch(urlData)
+          .then((response) => {
+              if (!response.ok) {
+                  clearInterval(timerId);
+                  throw new Error('Ответ сети был не ok.');
+              }
+              return response.json();
+          })
+          .then((data) => {
+            const { full_count, version, ...rest } = data;
+            const allAirplanes = formattingData(rest);
+            sortedData(allAirplanes, isSortValue);
+            drawTable(allAirplanes);
+          })
+          .catch((error) => {
+              console.log(error.message);
+              clearInterval(timerId);
+          });
+      }, 4000);
+    })
+    .catch((error) => console.log(error.message));
 });
