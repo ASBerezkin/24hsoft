@@ -8,20 +8,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const container = document.querySelector(".air-table__body");
   const columnSorted = document.querySelector("[data-sorted]");
   const sortedData = (data, isMaxSorted = true) => {
-    return data.sort((a, b) => (isMaxSorted ? a[9] - b[9] : b[9] - a[9]));
+    return data.sort((a, b) => (isMaxSorted ? a[8] - b[8] : b[8] - a[8]));
   };
   const drawTable = (data) => {
     container.innerHTML = "";
     data.map((el) => {
       return (container.innerHTML += createRow(
         el[0],
-        el[2],
-        `${el[3]} - ${el[4]}`,
-        el[5],
+        el[1],
+        `${el[2]} - ${el[3]}`,
+        el[4],
         "?",
-        el[6],
-        `${el[7]} - ${el[8]}`,
-        el[9]
+        el[5],
+        `${el[6]} - ${el[7]}`,
+        el[8]
       ));
     });
     // после отрисовки таблицы у нас все все строки
@@ -148,7 +148,6 @@ document.addEventListener("DOMContentLoaded", () => {
           ...acc,
           [
             id,
-            false,
             flightNumber,
             coords1,
             coords2,
@@ -205,5 +204,8 @@ document.addEventListener("DOMContentLoaded", () => {
           });
       }, 4000);
     })
-    .catch((error) => console.log(error.message));
+    .catch((error) => {
+      console.log(error.message);
+      throw new Error('Ответ сети был не ok.');
+    });
 });
